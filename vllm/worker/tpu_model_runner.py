@@ -316,13 +316,14 @@ class TPUModelRunner(ModelRunnerBase[ModelInputForTPU]):
 
             prompt_len = len(prompt_tokens)
             prompt_lens.append(prompt_len)
+            print(prompt_len)
 
             input_tokens.extend(prompt_tokens)
             input_positions.extend(range(num_computed_tokens, seq_len))
 
             assert seq_group_metadata.block_tables is not None
             block_table = seq_group_metadata.block_tables[seq_id]
-            for i in range(prompt_len):
+            for i in range(num_computed_tokens, seq_len):
                 block_number = block_table[i // self.block_size]
                 block_offset = i % self.block_size
                 slot = block_number * self.block_size + block_offset
@@ -599,6 +600,7 @@ class TPUModelRunner(ModelRunnerBase[ModelInputForTPU]):
                         self.device)
                     attn_metadata.block_tables = orig_block_tables[
                         i].unsqueeze(0).to(self.device)
+                    print(orig_context_lens)
                 else:
                     attn_metadata.context_lens = None
                     attn_metadata.block_tables = None
