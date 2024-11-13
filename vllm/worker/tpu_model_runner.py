@@ -11,7 +11,6 @@ import torch_xla.core.xla_model as xm
 import torch_xla.runtime as xr
 
 from vllm.attention import AttentionMetadata, get_attn_backend
-from vllm.compilation.wrapper import TorchCompileWrapperWithCustomDispatcher
 from vllm.config import VllmConfig
 from vllm.logger import init_logger
 from vllm.model_executor.layers.sampler import SamplerOutput
@@ -140,7 +139,12 @@ class TPUModelRunner(ModelRunnerBase[ModelInputForTPU]):
             model = get_model(vllm_config=self.vllm_config)
         model = model.eval()
         xm.wait_device_ops()
-        self.model = ModelWrapper(model)
+
+        model = ModelWrapper(model)
+        self.model = torch.compile(model,
+                                   backend="openxla",
+                                   fullgraph=True,
+                                   dynamic=False)
 
     def _dummy_run(
         self,
@@ -287,9 +291,11 @@ class TPUModelRunner(ModelRunnerBase[ModelInputForTPU]):
         input_tokens: List[int] = []
         input_positions: List[int] = []
         prompt_lens: List[int] = []
+        context_lens: List[int] = []
         slot_mapping: List[int] = []
 
-        for seq_group_metadata in seq_group_metadata_list:
+        for batch_idx, seq_group_metadata in enumerate(
+                seq_group_metadata_list):
             assert seq_group_metadata.is_prompt
             seq_ids = list(seq_group_metadata.seq_data.keys())
             assert len(seq_ids) == 1
@@ -298,11 +304,21 @@ class TPUModelRunner(ModelRunnerBase[ModelInputForTPU]):
             seq_data = seq_group_metadata.seq_data[seq_id]
             # Could include output tokens when a request is preempted.
             prompt_tokens = seq_data.get_token_ids()
+            seq_len = len(prompt_tokens)
+
+            num_computed_blocks = len(seq_group_metadata.computed_block_nums)
+            num_computed_tokens = num_computed_blocks * self.block_size
+            if num_computed_tokens > 0:
+                prompt_tokens = prompt_tokens[num_computed_tokens:]
+                context_lens.append(seq_len)
+            else:
+                context_lens.append(0)
+
             prompt_len = len(prompt_tokens)
             prompt_lens.append(prompt_len)
 
             input_tokens.extend(prompt_tokens)
-            input_positions.extend(list(range(prompt_len)))
+            input_positions.extend(range(num_computed_tokens, seq_len))
 
             assert seq_group_metadata.block_tables is not None
             block_table = seq_group_metadata.block_tables[seq_id]
@@ -311,6 +327,8 @@ class TPUModelRunner(ModelRunnerBase[ModelInputForTPU]):
                 block_offset = i % self.block_size
                 slot = block_number * self.block_size + block_offset
                 slot_mapping.append(slot)
+            if num_computed_tokens > 0:
+                self.block_tables[batch_idx, :len(block_table)] = block_table
 
             # Add paddings to EACH prompt to the smallest power of 2 that is
             # greater than or equal to the prompt length.
@@ -338,14 +356,20 @@ class TPUModelRunner(ModelRunnerBase[ModelInputForTPU]):
         prompt_lens = torch.tensor(prompt_lens,
                                    dtype=torch.int32,
                                    device="cpu")
+        context_lens = torch.tensor(context_lens,
+                                    dtype=torch.int32,
+                                    device="cpu")
+        block_tables = torch.tensor(self.block_tables[:num_prefills],
+                                    dtype=torch.int32,
+                                    device="cpu")
         attn_metadata = self.attn_backend.make_metadata(
             num_prefills=num_prefills,
             num_prefill_tokens=0,  # NOTE: This is not used.
             num_decode_tokens=0,
             slot_mapping=slot_mapping,
             multi_modal_placeholder_index_maps=None,
-            block_tables=None,
-            context_lens=None,
+            block_tables=block_tables,
+            context_lens=context_lens,
         )
         return input_tokens, input_positions, attn_metadata, prompt_lens
 
@@ -550,6 +574,8 @@ class TPUModelRunner(ModelRunnerBase[ModelInputForTPU]):
             # process them separately. This is a temporary hack that should be
             # optimized by using SplashAttention.
             orig_slot_mapping = model_input.attn_metadata.slot_mapping
+            orig_block_tables = model_input.attn_metadata.block_tables
+            orig_context_lens = model_input.attn_metadata.context_lens
             batch_size = model_input.input_lens.shape[0]
             start_idx = 0
             next_token_ids = []
@@ -568,6 +594,14 @@ class TPUModelRunner(ModelRunnerBase[ModelInputForTPU]):
                 attn_metadata.num_prefills = 1
                 attn_metadata.slot_mapping = orig_slot_mapping[
                     None, start_idx:end_idx].to(self.device)
+                if orig_context_lens[i].item() > 0:
+                    attn_metadata.context_lens = orig_context_lens[i:i + 1].to(
+                        self.device)
+                    attn_metadata.block_tables = orig_block_tables[
+                        i].unsqueeze(0).to(self.device)
+                else:
+                    attn_metadata.context_lens = None
+                    attn_metadata.block_tables = None
                 input_lens = model_input.input_lens[i:i + 1].to(self.device)
                 t = model_input.t[i:i + 1].to(self.device)
                 p = model_input.p[i:i + 1].to(self.device)
@@ -667,32 +701,11 @@ class TPUModelRunner(ModelRunnerBase[ModelInputForTPU]):
             return [sampler_output]
 
 
-class ModelWrapper(TorchCompileWrapperWithCustomDispatcher):
+class ModelWrapper(nn.Module):
 
     def __init__(self, model: nn.Module):
+        super().__init__()
         self.model = model
-        compiled_callable = torch.compile(self.forward,
-                                          backend="openxla",
-                                          fullgraph=True,
-                                          dynamic=False)
-        super().__init__(compiled_callable)
-
-    def __call__(self, *args, is_prompt: bool, **kwargs):
-        if len(self.compiled_codes) < 3 or not self.use_custom_dispatcher:
-            # not fully compiled yet, or not using the custom dispatcher,
-            # let PyTorch handle it
-            return self.compiled_callable(*args, **kwargs)
-        # the 3 compiled codes are:
-        # 0: for profiling
-        # 1: for prompt
-        # 2: for decode
-        # dispatch to the compiled code directly, skip PyTorch
-        if is_prompt:
-            with self.dispatch_to_code(1):
-                return self.forward(*args, **kwargs)
-        else:
-            with self.dispatch_to_code(2):
-                return self.forward(*args, **kwargs)
 
     def forward(
         self,
@@ -704,6 +717,7 @@ class ModelWrapper(TorchCompileWrapperWithCustomDispatcher):
         p: torch.Tensor,
         num_samples: int,
         kv_caches: List[Tuple[torch.Tensor, torch.Tensor]],
+        is_prompt: bool,
     ) -> torch.Tensor:
         """Executes the forward pass of the model and samples the next token.
 
