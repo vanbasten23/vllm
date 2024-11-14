@@ -116,6 +116,7 @@ def test_flash_attn_with_paged_kv(
                                  (num_seqs, max_num_blocks_per_seq),
                                  dtype=torch.int32)
 
+    # xw32: this seems to be case where query_len==1
     output = flash_attn_with_kvcache(
         q=query.unsqueeze(1),
         k_cache=key_cache,
@@ -141,6 +142,7 @@ def test_flash_attn_with_paged_kv(
         f"{torch.max(torch.abs(output - ref_output))}"
 
 
+# xw32: this is what Woosuk mentions about: For the kernel benchmark, actually it would be easier to use https://github.com/vllm-project/vllm/blob/main/tests/kernels/test_flash_attn.py
 @pytest.mark.parametrize("seq_lens", [[(1, 1328), (5, 18), (129, 463)]])
 @pytest.mark.parametrize("num_heads", NUM_HEADS)
 @pytest.mark.parametrize("head_size", HEAD_SIZES)
