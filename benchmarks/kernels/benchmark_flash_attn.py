@@ -40,10 +40,15 @@ def main(args) -> None:
                    (-1, -1))
     scale = head_size**-0.5
 
-    query = torch.randn(sum(query_lens),
-                        num_query_heads,
-                        head_size,
-                        dtype=dtype)
+    assert args.kernel == "single-query-flash-attn" or args.kernel == "multi-queries-flash-attn", f"Invalid argument {args.kernel}"
+    if args.kernel == "multi-queries-flash-attn":
+        query = torch.randn(sum(query_lens),
+                          num_query_heads,
+                          head_size,
+                          dtype=dtype)
+    elif args.kernel == "single-query-flash-attn":
+        query = torch.randn(num_seqs, num_query_heads, head_size, dtype=dtype)
+        
     key_cache = torch.randn(num_blocks,
                             block_size,
                             num_kv_heads,
@@ -70,27 +75,41 @@ def main(args) -> None:
         start_time = time.perf_counter()
 
         for _ in range(num_iters):
-            flash_attn_varlen_func(
-                q=query,
-                k=key_cache,
-                v=value_cache,
-                cu_seqlens_q=cu_query_lens,
-                cu_seqlens_k=cu_kv_lens,
-                max_seqlen_q=max_query_len,
-                max_seqlen_k=max_kv_len,
-                softmax_scale=scale,
-                causal=True,
-                window_size=window_size,
-                block_table=block_tables,
-                softcap=soft_cap if soft_cap is not None else 0,
-            )
+            if args.kernel == "multi-queries-flash-attn":
+                flash_attn_varlen_func(
+                    q=query,
+                    k=key_cache,
+                    v=value_cache,
+                    cu_seqlens_q=cu_query_lens,
+                    cu_seqlens_k=cu_kv_lens,
+                    max_seqlen_q=max_query_len,
+                    max_seqlen_k=max_kv_len,
+                    softmax_scale=scale,
+                    causal=True,
+                    window_size=window_size,
+                    block_table=block_tables,
+                    softcap=soft_cap if soft_cap is not None else 0,
+                )
+            elif args.kernel == "single-query-flash-attn":
+                kv_lens_tensor = torch.tensor(kv_lens, dtype=torch.int32)
+                flash_attn_with_kvcache(
+                    q=query.unsqueeze(1),
+                    k_cache=key_cache,
+                    v_cache=value_cache,
+                    softmax_scale=scale,
+                    causal=True,
+                    block_table=block_tables,
+                    cache_seqlens=kv_lens_tensor,
+                    softcap=soft_cap if soft_cap is not None else 0,
+                    window_size=window_size,
+                ).squeeze(1)
         torch.cuda.synchronize()
 
         end_time = time.perf_counter()
         if profile:
-            torch.cuda.cudart().cudaProfilerStart()
+            torch.cuda.cudart().cudaProfilerStop()
         return (end_time - start_time) / num_iters
-    
+   
     # Warmup.
     print("Warming up...")
     run_benchmark = run_cuda_benchmark
