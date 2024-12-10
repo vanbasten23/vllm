@@ -23,12 +23,17 @@ ShareGPT example usage:
         --num-prompts 20 \
         --repeat-count 5 \
         --input-length-range 128:256
+
+Note to xw32:
+    # To enable profiling on xla, run
+    PROFILE_LOGDIR='/mnt/disks/persist/torchprofiles' PROFILE_DURATION_MS=5000 python benchmark_prefix_caching.py --model google/gemma-2b --enable-prefix-caching --num-prompts 1 --repeat-count 100 --prefix-len 128  --input-length-range 128:256 --profile-xla  2>&1 | tee ~/out.txt
 """
 
 import dataclasses
 import json
 import random
 import time
+import os
 from typing import List, Optional, Tuple
 
 from transformers import PreTrainedTokenizerBase
@@ -36,6 +41,13 @@ from transformers import PreTrainedTokenizerBase
 from vllm import LLM, SamplingParams
 from vllm.engine.arg_utils import EngineArgs
 from vllm.utils import FlexibleArgumentParser
+
+import torch
+import torch_xla
+import torch_xla.core.xla_model as xm
+import torch_xla.runtime as xr
+import torch_xla.debug.metrics as met
+import torch_xla.debug.profiler as xp
 
 try:
     from vllm.transformers_utils.tokenizer import get_tokenizer
@@ -152,8 +164,24 @@ def repeat_and_sort_requests(requests: List[Request],
         random.shuffle(repeated_requests)
     return [req.prompt for req in repeated_requests]
 
+def test_xla():
+    profile_logdir = os.environ.get('PROFILE_LOGDIR', None)
+    # ms=milliseconds. 
+    profile_duration = int(os.environ.get('PROFILE_DURATION_MS', 20000))
+    import tempfile
+    xp.trace_detached('localhost:9012', profile_logdir or tempfile.mkdtemp(), profile_duration or 20000)
+    t0 = torch.randn(2, 2, device=xm.xla_device())
+    t1 = torch.randn(2, 2, device=xm.xla_device())
+    t2 = t0+t1
+    print(t2)
+    xm.mark_step()
+    xm.wait_device_ops()
+
 
 def main(args):
+    if args.profile_xla:
+        server = xp.start_server(9012)
+
     tokenizer = get_tokenizer(args.model, trust_remote_code=True)
     input_length_range = tuple(map(int, args.input_length_range.split(':')))
     random.seed(args.seed)
@@ -200,11 +228,22 @@ def main(args):
                                        sort=args.sort)
 
     print("------start generating------")
+    if args.profile_xla:
+        xm.mark_step()
+        xm.wait_device_ops()
+        profile_logdir = os.environ.get('PROFILE_LOGDIR', None)
+        # ms=milliseconds. 
+        profile_duration = int(os.environ.get('PROFILE_DURATION_MS', 20000))
+        import tempfile
+        xp.trace_detached('localhost:9012', profile_logdir or tempfile.mkdtemp(), profile_duration or 20000)
     test_prefix(
         llm=llm,
         prompts=prompts,
         sampling_params=sampling_params,
     )
+    if args.profile_xla:
+        xm.mark_step()
+        xm.wait_device_ops()
 
 
 if __name__ == "__main__":
@@ -241,6 +280,9 @@ if __name__ == "__main__":
         "subtract this length when filtering prompts. Only used "
         "when dataset-path is not provided.",
     )
+    parser.add_argument('--profile-xla',
+                        action='store_true',
+                        help='Sort prompts by input length')
 
     parser = EngineArgs.add_cli_args(parser)
     args = parser.parse_args()

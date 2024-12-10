@@ -3,6 +3,7 @@ from typing import Any, Dict, List, Optional, Tuple, Type
 
 import torch
 import torch_xla.experimental.custom_kernel  # Required to register custom ops.
+import torch_xla.debug.profiler as xp
 
 from vllm.attention.backends.abstract import (AttentionBackend, AttentionImpl,
                                               AttentionMetadata, AttentionType)
@@ -141,6 +142,7 @@ class PallasAttentionBackendImpl(AttentionImpl):
                 # megacore mode will be None.
                 self.megacore_mode = "batch"
 
+    # @xp.trace_me("PallasAttentionBackendImpl.forward")
     def forward(
         self,
         query: torch.Tensor,
