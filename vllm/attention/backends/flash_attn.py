@@ -887,6 +887,7 @@ def unified_flash_attention(
                 "Only decoder-only models support prefix caching")
             assert prefill_meta.seq_lens is not None
             max_seq_len = max(prefill_meta.seq_lens)
+            torch.cuda.nvtx.range_push("line890 flash_attn_varlen_func")
             prefill_output = flash_attn_varlen_func(  # noqa
                 q=query,
                 k=key_cache,
@@ -902,6 +903,7 @@ def unified_flash_attention(
                 block_table=prefill_meta.block_tables,
                 softcap=logits_soft_cap,
             )
+            torch.cuda.nvtx.range_pop()
 
     if decode_meta := attn_metadata.decode_metadata:
         # Decoding run.
