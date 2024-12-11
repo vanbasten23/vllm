@@ -31,6 +31,7 @@ import random
 import time
 from typing import List, Optional, Tuple
 
+import torch
 from transformers import PreTrainedTokenizerBase
 
 from vllm import LLM, SamplingParams
@@ -200,11 +201,13 @@ def main(args):
                                        sort=args.sort)
 
     print("------start generating------")
+    torch.cuda.cudart().cudaProfilerStart()
     test_prefix(
         llm=llm,
         prompts=prompts,
         sampling_params=sampling_params,
     )
+    torch.cuda.cudart().cudaProfilerStop()
 
 
 if __name__ == "__main__":

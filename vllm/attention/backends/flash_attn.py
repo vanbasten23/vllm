@@ -754,6 +754,7 @@ class FlashAttentionImpl(AttentionImpl):
                     "Only decoder-only models support prefix caching")
                 assert prefill_meta.seq_lens is not None
                 max_seq_len = max(prefill_meta.seq_lens)
+                torch.cuda.nvtx.range_push("xw32 line757 flash_attn_varlen_func begins")
                 flash_attn_varlen_func(  # noqa
                     q=query,
                     k=key_cache,
@@ -770,6 +771,7 @@ class FlashAttentionImpl(AttentionImpl):
                     softcap=logits_soft_cap,
                     out=prefill_output,
                 )
+                torch.cuda.nvtx.range_push("xw32 line757 flash_attn_varlen_func ends")
 
         if decode_meta := attn_metadata.decode_metadata:
             # Decoding run.
