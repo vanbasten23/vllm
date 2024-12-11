@@ -771,7 +771,7 @@ class FlashAttentionImpl(AttentionImpl):
                     softcap=logits_soft_cap,
                     out=prefill_output,
                 )
-                torch.cuda.nvtx.range_push("xw32 line757 flash_attn_varlen_func ends")
+                torch.cuda.nvtx.range_pop()
 
         if decode_meta := attn_metadata.decode_metadata:
             # Decoding run.
