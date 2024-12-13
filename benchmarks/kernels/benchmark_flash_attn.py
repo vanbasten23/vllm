@@ -1,6 +1,9 @@
 # Benchmark flash attention kernel using the same input as in https://github.com/pytorch/xla/blob/xiowei/paged_attn_benchmark_tpu/test/benchmarks/test_paged_attention_mfu.py
 # To run, do
 # (myvllmenv) xiowei@a100-8:~/github/myforks/vllm/benchmarks$ python kernels/benchmark_flash_attn.py --kernel "multi-queries-flash-attn"
+# To get the profile, do
+# (myvllmenv) xiowei@a100-8:~/github/myforks/vllm/benchmarks$ rm my_profile.nsys-rep
+# (myvllmenv) xiowei@a100-8:~/github/myforks/vllm/benchmarks$ nsys profile -w true -t cuda,nvtx,osrt,cudnn,cublas -s cpu  --capture-range=cudaProfilerApi  --cudabacktrace=true -x true -o ./my_profile python kernels/benchmark_flash_attn.py --kernel "multi-queries-flash-attn" --profile 
 import random
 import time
 from typing import List, Optional, Tuple
@@ -70,6 +73,7 @@ def main(args) -> None:
                                  num_blocks,
                                  (num_seqs, max_num_blocks_per_seq),
                                  dtype=torch.int32)
+    print(f'{query.shape=}, {key_cache.shape=},{value_cache.shape=},{cu_query_lens.shape=}, {cu_kv_lens.shape=}, {max_query_len=}, {max_kv_len=}, {block_tables=}')
 
     def run_cuda_benchmark(num_iters: int, profile: bool = False) -> float:
         torch.cuda.synchronize()
@@ -79,6 +83,7 @@ def main(args) -> None:
 
         for _ in range(num_iters):
             if args.kernel == "multi-queries-flash-attn":
+                torch.cuda.nvtx.range_push("line82 flash_attn_varlen_func")
                 flash_attn_varlen_func(
                     q=query,
                     k=key_cache,
@@ -93,6 +98,7 @@ def main(args) -> None:
                     block_table=block_tables,
                     softcap=soft_cap if soft_cap is not None else 0,
                 )
+                torch.cuda.nvtx.range_pop()
             elif args.kernel == "single-query-flash-attn":
                 kv_lens_tensor = torch.tensor(kv_lens, dtype=torch.int32)
                 flash_attn_with_kvcache(
@@ -121,7 +127,7 @@ def main(args) -> None:
     # Benchmark.
     print("Run benchmark...")
     if args.profile:
-        latency = run_benchmark(num_iters=1, profile=True)
+        latency = run_benchmark(num_iters=3, profile=True)
     else:
         latency = run_benchmark(num_iters=100, profile=False)
     print(f"Kernel running time: {latency * 1000000:.3f} us")
