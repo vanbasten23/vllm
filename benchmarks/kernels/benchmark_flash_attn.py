@@ -1,4 +1,4 @@
-# Benchmark flash attention kernel using the same input as in https://github.com/pytorch/xla/blob/xiowei/paged_attn_benchmark_tpu/test/benchmarks/test_paged_attention_mfu.py
+# Benchmark flash attention kernel using the same input as in the real prefix caching benchmark script.
 # To run, do
 # (myvllmenv) xiowei@a100-8:~/github/myforks/vllm/benchmarks$ python kernels/benchmark_flash_attn.py --kernel "multi-queries-flash-attn"
 # To get the profile, do
@@ -20,21 +20,40 @@ from vllm.vllm_flash_attn import (flash_attn_varlen_func,
 NUM_BLOCKS = 1024
 PARTITION_SIZE = 512
 
-
+# When running benchmark_prefix_caching, here is the input size:
+# num_tokens=1342, num_q_heads=8, head_size=256, 
+# num_kv_heads=1, total_num_pages=231746, page_size=16 
+# query_start_loc=tensor([0,1248,1249, 1250,...,1342]), max_query_len=1249
+# query_start_loc.shape=torch.Size([95])
+# seq_start_loc=tensor([0,1248,2496,...,117406]),max_seq_len=1249
+# seq_start_loc.shape=torch.Size([95])
+# softmax_scale=0.0625, window_size=(-1, -1), alibi_slopes=None
+# logits_soft_cap=0, block_tables.shape=torch.Size([94, 78])
+# block_tables=tensor([[ 0,  1,  2,  ..., 75, 76, 77],
+#        [ 0,  1,  2,  ..., 75, 76, 77],
+#        [ 0,  1,  2,  ..., 75, 76, 77],
+#        ...,
+#        [ 0,  1,  2,  ..., 75, 76, 77],
+#        [ 0,  1,  2,  ..., 75, 76, 77],
+#        [ 0,  1,  2,  ..., 75, 76, 77]]
 @torch.inference_mode()
 def main(args) -> None:
-    seq_lens = [(16, 768), (16, 768), (16, 768)]
-    num_heads = (4, 1)
+    num_seqs = 94
+    
+    seq_lens = [(1248, 1248)]
+    for _ in range(num_seqs-1):
+        seq_lens.append((1, 1248))
+
+    num_heads = (8, 1)
     head_size = 256
     block_size = 16
     sliding_window = None
     dtype = torch.bfloat16
     soft_cap = None
-    num_blocks = 48
+    num_blocks = 231746
 
     torch.set_default_device("cuda")
     current_platform.seed_everything(0)
-    num_seqs = len(seq_lens)
     query_lens = [x[0] for x in seq_lens]
     kv_lens = [x[1] for x in seq_lens]
     num_query_heads = num_heads[0]
