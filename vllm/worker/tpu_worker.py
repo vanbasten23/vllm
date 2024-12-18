@@ -288,7 +288,7 @@ def _make_src_to_dst(
     return src_indices, dst_indices
 
 
-@torch.compile(backend="openxla")
+# @torch.compile(backend="openxla")
 def _insert_kv(
     k: torch.Tensor,
     v: torch.Tensor,
@@ -296,7 +296,7 @@ def _insert_kv(
     tpu_k_cache: torch.Tensor,
     tpu_v_cache: torch.Tensor,
 ) -> None:
-    torch.ops.xla.dynamo_set_buffer_donor_(tpu_k_cache, True)
-    torch.ops.xla.dynamo_set_buffer_donor_(tpu_v_cache, True)
+    # torch.ops.xla.dynamo_set_buffer_donor_(tpu_k_cache, True)
+    # torch.ops.xla.dynamo_set_buffer_donor_(tpu_v_cache, True)
     tpu_k_cache[:, indices] = k
     tpu_v_cache[:, indices] = v

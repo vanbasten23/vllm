@@ -45,7 +45,7 @@ class PallasAttentionBackend(AttentionBackend):
     ) -> None:
         raise RuntimeError("swap_blocks is not used for the TPU backend.")
 
-    @torch.compile(backend="openxla")
+    # @torch.compile(backend="openxla")
     @staticmethod
     def copy_blocks(
         kv_caches: List[Tuple[torch.Tensor, torch.Tensor]],
@@ -187,6 +187,7 @@ class PallasAttentionBackendImpl(AttentionImpl):
             write_to_kv_cache(key, value, key_cache, value_cache, slot_mapping)
 
         query = query * self.scale
+        print('xw32 pallas. should fail.')
         if attn_metadata.num_prefills > 0:
             if attn_metadata.block_tables is None:
                 # Prefill without paged KV cache.

@@ -258,7 +258,7 @@ class GemmaDecoderLayer(nn.Module):
         return hidden_states, residual
 
 
-@support_torch_compile
+# @support_torch_compile
 class GemmaModel(nn.Module):
 
     def __init__(self, *, vllm_config: VllmConfig, prefix: str = ""):

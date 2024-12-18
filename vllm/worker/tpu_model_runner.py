@@ -151,10 +151,11 @@ class TPUModelRunner(ModelRunnerBase[ModelInputForTPU]):
         model = model.eval()
         xm.wait_device_ops()
         model = ModelWrapper(model)
-        self.model = torch.compile(model,
-                                backend="openxla",
-                                fullgraph=True,
-                                dynamic=False)
+        self.model = model
+        # self.model = torch.compile(model,
+        #                         backend="openxla",
+        #                         fullgraph=True,
+        #                         dynamic=False)
         # logger.info("xw32 torch.compiled the model.")
 
     def _dummy_run(
