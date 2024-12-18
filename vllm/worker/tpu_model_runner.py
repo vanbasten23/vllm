@@ -130,6 +130,7 @@ class TPUModelRunner(ModelRunnerBase[ModelInputForTPU]):
                 self.model_config.max_model_len)
 
     def load_model(self) -> None:
+        logger.info("xw32 TPUModelRunner.load_model begins.")
         self.device = self.device_config.device
 
         # NOTE(woosuk): While the executor assigns the TP ranks to the worker
@@ -151,10 +152,10 @@ class TPUModelRunner(ModelRunnerBase[ModelInputForTPU]):
         xm.wait_device_ops()
         model = ModelWrapper(model)
         self.model = torch.compile(model,
-                                   backend="openxla",
-                                   fullgraph=True,
-                                   dynamic=False)
-        logger.info("xw32 torch.compiled the model.")
+                                backend="openxla",
+                                fullgraph=True,
+                                dynamic=False)
+        # logger.info("xw32 torch.compiled the model.")
 
     def _dummy_run(
         self,
@@ -163,6 +164,7 @@ class TPUModelRunner(ModelRunnerBase[ModelInputForTPU]):
         kv_caches: List[Tuple[torch.Tensor, torch.Tensor]],
         exec_mode: ExecutionMode,
     ) -> None:
+        logger.info("xw32 TPUModelRunner._dummy_run begins.")
         exec_mode = ExecutionMode(exec_mode)
         if exec_mode.is_prefill():
             seq_len = (seq_len + 15) // 16 * 16
@@ -271,6 +273,7 @@ class TPUModelRunner(ModelRunnerBase[ModelInputForTPU]):
         self,
         kv_caches: List[Tuple[torch.Tensor, torch.Tensor]],
     ) -> None:
+        logger.info("xw32 TPUModelRunner.warmup_model begins.")
         # Prefill
         logger.info("Compiling the model with different input shapes...")
         start = time.time()
@@ -362,7 +365,7 @@ class TPUModelRunner(ModelRunnerBase[ModelInputForTPU]):
             num_computed_tokens = num_computed_blocks * self.block_size
             if num_computed_tokens > 0:
                 # xw32: cache hit for prefix caching per Woosuk.
-                logger.info("xw32 line364: cache hit for prefix caching per Woosuk.")
+                # logger.info("xw32 line364: cache hit for prefix caching per Woosuk.")
                 prompt_tokens = prompt_tokens[num_computed_tokens:]
                 context_lens.append(seq_len)
             else:
@@ -553,6 +556,7 @@ class TPUModelRunner(ModelRunnerBase[ModelInputForTPU]):
         virtual_engine: int = 0,
         finished_requests_ids: Optional[List[str]] = None,
     ) -> ModelInputForTPU:
+        logger.info("xw32 TPUModelRunner.prepare_model_input begins.")
         del finished_requests_ids  # Unused.
         assert virtual_engine == 0
         assert len(seq_group_metadata_list) > 0
@@ -590,6 +594,7 @@ class TPUModelRunner(ModelRunnerBase[ModelInputForTPU]):
         intermediate_tensors: Optional[IntermediateTensors] = None,
         num_steps: int = 1,
     ) -> List[SamplerOutput]:
+        logger.info("xw32 TPUModelRunner.execute_model begins.")
         assert intermediate_tensors is None
         if not model_input.is_first_multi_step:
             if not model_input.is_last_step:
@@ -654,7 +659,7 @@ class TPUModelRunner(ModelRunnerBase[ModelInputForTPU]):
                     None, start_idx:end_idx].to(self.device)
                 if orig_context_lens[i].item() > 0:
                     # xw32: cache hit for prefix caching per Woosuk.
-                    logger.info("xw32 line654: execute_model, prompt case, cache hit case for prefix caching per Woosuk.")
+                    # logger.info("xw32 line654: execute_model, prompt case, cache hit case for prefix caching per Woosuk.")
                     attn_metadata.context_lens = orig_context_lens[i:i + 1].to(
                         self.device)
                     attn_metadata.block_tables = orig_block_tables[
@@ -662,7 +667,7 @@ class TPUModelRunner(ModelRunnerBase[ModelInputForTPU]):
                     attn_metadata.effective_query_lens = \
                         orig_effective_query_lens[i:i + 1].to(self.device)
                 else:
-                    logger.info("xw32 line663: execute_model, prompt case, cache miss case for prefix caching per Woosuk.")
+                    # logger.info("xw32 line663: execute_model, prompt case, cache miss case for prefix caching per Woosuk.")
                     attn_metadata.context_lens = None
                     attn_metadata.block_tables = None
                     attn_metadata.effective_query_lens = None
@@ -703,7 +708,7 @@ class TPUModelRunner(ModelRunnerBase[ModelInputForTPU]):
                     CompletionSequenceGroupOutput(seq_outputs, None))
             return [SamplerOutput(sampler_outputs)]
         else:  # not prompt case
-            logger.info("xw32 line704: execute_model, non-prompt case")
+            # logger.info("xw32 line704: execute_model, non-prompt case")
             token_ids = model_input.token_ids.to(self.device)
             position_ids = model_input.position_ids.to(self.device)
             attn_metadata = model_input.attn_metadata

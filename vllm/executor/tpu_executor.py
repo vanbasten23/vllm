@@ -18,6 +18,7 @@ class TPUExecutor(ExecutorBase):
     uses_ray: bool = False
 
     def _init_executor(self) -> None:
+        logger.info("xw32 TPUExecutor._init_executor")
         assert not self.scheduler_config.chunked_prefill_enabled, (
             "Chunked prefill is not yet supported for TPU backend")
         assert not self.speculative_config, (
@@ -75,6 +76,7 @@ class TPUExecutor(ExecutorBase):
         num_cpu_blocks: int,
     ) -> None:
         """Initialize the KV cache by invoking the underlying worker."""
+        logger.info("xw32 TPUExecutor.initialize_cache")
         # NOTE: This is logged in the executor because there can be >1 worker
         # with other executors. We could log in the engine level, but work
         # remains to abstract away the device for non-GPU configurations.
@@ -85,12 +87,14 @@ class TPUExecutor(ExecutorBase):
     def determine_num_available_blocks(self) -> Tuple[int, int]:
         """Determine the number of available KV blocks by invoking the
         underlying worker."""
+        logger.info("xw32 TPUExecutor.determine_num_available_blocks")
         return self.driver_worker.determine_num_available_blocks()
 
     def execute_model(
         self,
         execute_model_req: ExecuteModelRequest,
     ) -> List[SamplerOutput]:
+        logger.info("xw32 TPUExecutor.execute_model")
         output = self.driver_worker.execute_model(execute_model_req)
         return output
 
@@ -137,6 +141,7 @@ class TPUExecutorAsync(TPUExecutor, ExecutorAsyncBase):
         self,
         sexecute_model_req: ExecuteModelRequest,
     ) -> SamplerOutput:
+        logger.info("xw32 TPUExecutorAsync.execute_model_async")
         output = await make_async(self.driver_worker.execute_model
                                   )(sexecute_model_req)
         return output

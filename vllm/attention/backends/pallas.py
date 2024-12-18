@@ -289,7 +289,7 @@ class PallasAttentionBackendImpl(AttentionImpl):
 
 
 def write_to_kv_cache(
-    key: torch.Tensor,
+    key: torch.Tensor,  # shape=[batch_size, seq_len, self.num_kv_heads, self.head_size]
     value: torch.Tensor,
     key_cache: torch.Tensor,
     value_cache: torch.Tensor,

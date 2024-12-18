@@ -200,7 +200,6 @@ def main(args):
         )
     else:
         print(f"Start to sample {args.num_prompts} prompts from random")
-        import pdb; pdb.set_trace()
         filtered_requests = sample_requests_from_random(
             num_requests=args.num_prompts,
             tokenizer=tokenizer,

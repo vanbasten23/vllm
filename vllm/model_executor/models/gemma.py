@@ -19,6 +19,7 @@ from typing import Iterable, List, Optional, Set, Tuple, Union
 import torch
 from torch import nn
 from transformers import GemmaConfig
+# import torch_xla.debug.profiler as xp
 
 from vllm.attention import Attention, AttentionMetadata
 from vllm.compilation.decorators import support_torch_compile
@@ -177,6 +178,7 @@ class GemmaAttention(nn.Module):
                               quant_config=quant_config,
                               prefix=f"{prefix}.attn")
 
+    # @xp.trace_me("GemmaAttention.forward")
     def forward(
         self,
         positions: torch.Tensor,

@@ -31,6 +31,7 @@ class TPUWorker(LoraNotSupportedWorkerBase, LocalOrDistributedWorkerBase):
         distributed_init_method: str,
         is_driver_worker: bool,
     ) -> None:
+        logger.info("xw32 TPUWorker.init.")
         WorkerBase.__init__(self, vllm_config=vllm_config)
         self.parallel_config.rank = rank
         self.local_rank = local_rank
@@ -49,6 +50,7 @@ class TPUWorker(LoraNotSupportedWorkerBase, LocalOrDistributedWorkerBase):
             vllm_config=vllm_config, is_driver_worker=is_driver_worker)
 
     def init_device(self) -> None:
+        logger.info("xw32 TPUWorker.init_device.")
         os.environ["PJRT_DEVICE"] = "TPU"
         torch.set_grad_enabled(False)
         torch.set_default_dtype(self.model_config.dtype)
@@ -92,9 +94,11 @@ class TPUWorker(LoraNotSupportedWorkerBase, LocalOrDistributedWorkerBase):
         xr.initialize_cache(per_rank_path, readonly=False)
 
     def load_model(self):
+        logger.info("xw32 TPUWorker.load_model")
         self.model_runner.load_model()
 
     def determine_num_available_blocks(self) -> Tuple[int, int]:
+        logger.info("xw32 TPUWorker.determine_num_available_blocks")
         num_layers = self.model_config.get_num_layers(self.parallel_config)
         head_size = self.model_config.get_head_size()
         num_kv_heads = self.model_config.get_num_kv_heads(self.parallel_config)
@@ -144,6 +148,7 @@ class TPUWorker(LoraNotSupportedWorkerBase, LocalOrDistributedWorkerBase):
         num_gpu_blocks: int,
         num_cpu_blocks: int,
     ) -> None:
+        logger.info("xw32 TPUWorker.initialize_cache")
         self.cache_config.num_gpu_blocks = num_gpu_blocks
         self.cache_config.num_cpu_blocks = num_cpu_blocks
         self.block_size = self.cache_config.block_size
@@ -186,6 +191,7 @@ class TPUWorker(LoraNotSupportedWorkerBase, LocalOrDistributedWorkerBase):
             self.model_runner.warmup_model(self.tpu_cache)
 
     def get_cache_block_size_bytes(self) -> int:
+        logger.info("xw32 TPUWorker.get_cache_block_size_bytes")
         head_size = self.model_config.get_head_size()
         num_heads = self.model_config.get_num_kv_heads(self.parallel_config)
         num_layers = self.model_config.get_num_layers(self.parallel_config)
@@ -210,6 +216,7 @@ class TPUWorker(LoraNotSupportedWorkerBase, LocalOrDistributedWorkerBase):
         self,
         execute_model_req: ExecuteModelRequest,
     ) -> WorkerInput:
+        logger.info("xw32 TPUWorker.prepare_worker_input")
         virtual_engine = execute_model_req.virtual_engine
         num_seq_groups = len(execute_model_req.seq_group_metadata_list)
         blocks_to_swap_in = _make_src_to_dst(
@@ -227,6 +234,7 @@ class TPUWorker(LoraNotSupportedWorkerBase, LocalOrDistributedWorkerBase):
         )
 
     def execute_worker(self, worker_input: WorkerInput) -> None:
+        logger.info("xw32 TPUWorker.execute_worker")
         virtual_engine = worker_input.virtual_engine
         assert virtual_engine == 0
         attn_backend = self.model_runner.attn_backend
