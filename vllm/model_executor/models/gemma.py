@@ -19,7 +19,7 @@ from typing import Iterable, List, Optional, Set, Tuple, Union
 import torch
 from torch import nn
 from transformers import GemmaConfig
-# import torch_xla.debug.profiler as xp
+import torch_xla.debug.profiler as xp
 
 from vllm.attention import Attention, AttentionMetadata
 from vllm.compilation.decorators import support_torch_compile
@@ -103,6 +103,7 @@ class GemmaMLP(nn.Module):
         )
         self.act_fn = _get_gemma_act_fn(hidden_act, hidden_activation)
 
+    @xp.trace_me("GemmaMLP.forward")
     def forward(self, x):
         gate_up, _ = self.gate_up_proj(x)
         x = self.act_fn(gate_up)
@@ -178,7 +179,7 @@ class GemmaAttention(nn.Module):
                               quant_config=quant_config,
                               prefix=f"{prefix}.attn")
 
-    # @xp.trace_me("GemmaAttention.forward")
+    @xp.trace_me("GemmaAttention.forward")
     def forward(
         self,
         positions: torch.Tensor,
@@ -228,7 +229,7 @@ class GemmaDecoderLayer(nn.Module):
                                             eps=config.rms_norm_eps)
         self.post_attention_layernorm = GemmaRMSNorm(config.hidden_size,
                                                      eps=config.rms_norm_eps)
-
+    @xp.trace_me("GemmaDecoderLayer.forward")
     def forward(
         self,
         positions: torch.Tensor,
@@ -294,6 +295,7 @@ class GemmaModel(nn.Module):
     def get_input_embeddings(self, input_ids: torch.Tensor) -> torch.Tensor:
         return self.embed_tokens(input_ids)
 
+    @xp.trace_me("GemmaModel.forward")
     def forward(
         self,
         input_ids: torch.Tensor,
@@ -313,7 +315,7 @@ class GemmaModel(nn.Module):
         else:
             hidden_states = intermediate_tensors["hidden_states"]
             residual = intermediate_tensors["residual"]
-        for i in range(self.start_layer, self.end_layer):
+        for i in range(0, 2):
             layer = self.layers[i]
             hidden_states, residual = layer(
                 positions,
@@ -387,6 +389,7 @@ class GemmaForCausalLM(nn.Module, SupportsLoRA, SupportsPP):
     def get_input_embeddings(self, input_ids: torch.Tensor) -> torch.Tensor:
         return self.model.get_input_embeddings(input_ids)
 
+    @xp.trace_me("GemmaForCausalLM.forward")
     def forward(
         self,
         input_ids: torch.Tensor,

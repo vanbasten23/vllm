@@ -142,6 +142,8 @@ class TPUModelRunner(ModelRunnerBase[ModelInputForTPU]):
         # determine the order of concatenating the output tensors.
         # As a workaround, we use the xm's rank assignment only when loading
         # the embedding weights.
+        # self.vllm_config.model_config.hf_config.num_hidden_layers=9
+        # print(f'xw32 line145 {self.vllm_config.model_config.hf_config=}')
         xm_tp_rank = xr.global_ordinal()
         with patch(
                 "vllm.model_executor.layers.vocab_parallel_embedding."
@@ -182,6 +184,7 @@ class TPUModelRunner(ModelRunnerBase[ModelInputForTPU]):
                                     dtype=torch.int32,
                                     device=self.device)
             if exec_mode == ExecutionMode.PREFILL:
+                logger.info("xw32 TPUModelRunner._dummy_run prefill:ExecutionMode.PREFILL case.")
                 attn_metadata = self.attn_backend.make_metadata(
                     num_prefills=batch_size,
                     num_prefill_tokens=batch_size * seq_len,
@@ -193,6 +196,7 @@ class TPUModelRunner(ModelRunnerBase[ModelInputForTPU]):
                     effective_query_lens=None,
                 )
             else:
+                logger.info("xw32 TPUModelRunner._dummy_run prefill:ExecutionMode.PREFIX_PREFILL case.")
                 context_lens = torch.ones((batch_size, ),
                                           dtype=torch.int32,
                                           device=self.device)
@@ -211,6 +215,7 @@ class TPUModelRunner(ModelRunnerBase[ModelInputForTPU]):
                     effective_query_lens=effective_query_lens,
                 )
         else:  # decode case
+            logger.info("xw32 TPUModelRunner._dummy_run decode case.")
             assert seq_len == 1
             token_ids = torch.zeros((batch_size, seq_len),
                                     dtype=torch.int32,

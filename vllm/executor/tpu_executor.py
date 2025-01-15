@@ -41,6 +41,7 @@ class TPUExecutor(ExecutorBase):
         distributed_init_method: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Return worker init args for a given rank."""
+        logger.info("xw32 TPUExecutor._get_worker_kwargs")
         if distributed_init_method is None:
             distributed_init_method = get_distributed_init_method(
                 get_ip(), get_open_port())
@@ -58,6 +59,7 @@ class TPUExecutor(ExecutorBase):
         rank: int = 0,
         distributed_init_method: Optional[str] = None,
     ):
+        logger.info("xw32 TPUExecutor._create_worker")
         if self.scheduler_config.is_multi_step:
             from vllm.worker.multi_step_tpu_worker import MultiStepTPUWorker
             worker = MultiStepTPUWorker(**self._get_worker_kwargs(

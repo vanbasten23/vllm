@@ -187,7 +187,7 @@ class PallasAttentionBackendImpl(AttentionImpl):
             write_to_kv_cache(key, value, key_cache, value_cache, slot_mapping)
 
         query = query * self.scale
-        print('xw32 pallas. should fail.')
+        print('xw32 PallasAttentionBackendImpl.forward begins.')
         if attn_metadata.num_prefills > 0:
             if attn_metadata.block_tables is None:
                 # Prefill without paged KV cache.
@@ -219,6 +219,7 @@ class PallasAttentionBackendImpl(AttentionImpl):
             else:
                 # Prefill with paged KV cache.
                 # TODO(woosuk): Tune the below knobs.
+                print('xw32 multi-queries paged attention is called.')
                 num_kv_pages_per_compute_block = 16
                 num_queries_per_compute_block = 16
                 assert seq_len % num_queries_per_compute_block == 0
