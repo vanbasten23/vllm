@@ -79,6 +79,7 @@ class LoRAModelRunnerMixin:
         token_lora_mapping: tuple[int,
                                   ...]  # of size np.sum(num_scheduled_tokens)
         lora_requests: set[LoRARequest]
+        # xw32q: who is the caller? what are prompt_lora_mapping, token_lora_mapping, lora_requests?
         prompt_lora_mapping, token_lora_mapping, lora_requests = \
                             input_batch.make_lora_inputs(num_scheduled_tokens)
         return self._set_active_loras(prompt_lora_mapping, token_lora_mapping,
@@ -102,6 +103,7 @@ class LoRAModelRunnerMixin:
                 for lora_id in range(1, num_loras + 1)
             }
 
+            # xw32q: what's the type of the self.lora_manager?
             with self.lora_manager.dummy_lora_cache():
                 # Add the dummy LoRAs here so _set_active_loras doesn't try to
                 # load from disk.

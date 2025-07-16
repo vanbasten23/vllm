@@ -40,6 +40,14 @@ def _mcp_apply(x, bias, layer: ColumnParallelLinearWithLoRA):
     """ 
     For `ColumnParallelLinearWithLoRA` or classes that inherit from 
     `ColumnParallelLinearWithLoRA`, they share the same `apply` logic.
+    
+    xw32: Forward Pass Logic (_mcp_apply):
+
+        Base Pass: The input x is passed through the original, frozen base layer. This produces a column-sharded output.
+        LoRA A Path: The input x is multiplied by the shard of the LoRA A matrix (x @ A_shard). Since A is sharded by rank, each GPU now holds a piece of the intermediate activation.
+        Communication (all_gather): A tensor_model_parallel_all_gather operation is performed. This collects the pieces of the intermediate activation from all GPUs, so every GPU now has the full, reconstructed intermediate activation.
+        LoRA B Path: The full intermediate activation is multiplied by the shard of the LoRA B matrix (intermediate @ B_shard). This produces a column-sharded LoRA output.
+        Combine: The sharded LoRA output is added to the sharded output from the base layer. The final result is a column-sharded tensor, ready for the next layer in the model.
     """
     assert (layer.n_slices == len(layer.lora_a_stacked) == len(
         layer.lora_b_stacked) == len(layer.output_slices))

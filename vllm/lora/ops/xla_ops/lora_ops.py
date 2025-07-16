@@ -66,6 +66,7 @@ def bgmv_expand(
             tensor.
     """
 
+    # xw32q: when is it used?
     outputs = torch.ops.xla.bgmv(inputs, lora_b_weights, lora_indices_tensor)
 
     limit = output_tensor.shape[0]
@@ -98,7 +99,7 @@ def bgmv_shrink(
             indicating which LoRA matrix to use for each token.
         scaling (float, optional): Scalar multiplier applied to the output.
     """
-
+    # xw32q: when is it used?
     return scaling * torch.ops.xla.bgmv(inputs, lora_b_weights,
                                         lora_indices_tensor)
 
@@ -127,6 +128,7 @@ def bgmv_expand_slice(
         add_inputs (bool): Whether or not to add the input tensor to the output
             tensor.
     """
+    # xw32q: when is it used?
     outputs = torch.ops.xla.bgmv(inputs, lora_b_weights, lora_indices_tensor)
 
     outputs = F.pad(

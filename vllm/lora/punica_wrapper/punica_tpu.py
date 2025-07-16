@@ -28,6 +28,7 @@ class PunicaWrapperTPU(PunicaWrapperBase):
 
     def __init__(self, max_num_batched_tokens: int, max_batches: int,
                  device: Union[torch.device, str], **kwargs):
+        # xw32q: when is it called and who is the caller?
         PunicaWrapperBase.__init__(self, max_num_batched_tokens, max_batches,
                                    device)
 

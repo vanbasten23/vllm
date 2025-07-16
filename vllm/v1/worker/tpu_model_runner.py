@@ -1145,6 +1145,7 @@ class TPUModelRunner(LoRAModelRunnerMixin):
             model = self.load_lora_model(model, self.model_config,
                                          self.scheduler_config,
                                          self.lora_config, self.device)
+            # xw32q: what's the type of the model before and after self.load_lora_model?
             replace_set_lora(model)
 
         # Sync all pending XLA execution during model initialization and weight
@@ -1830,6 +1831,7 @@ def replace_set_lora(model):
         self._original_reset_lora(index)
         xm.mark_step()
 
+    # xw32q: what does this function do?
     for _, module in model.named_modules():
         if isinstance(module, BaseLayerWithLoRA):
             module._original_set_lora = module.set_lora
